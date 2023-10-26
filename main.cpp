@@ -6,7 +6,13 @@
 
 float angle = 0.6;
 
-float alpha = 0.59;
+float alpha = 0.6;
+
+float translate = 0;
+float delTr = 0.07;
+
+int width = 1000;
+int height = 1000;
 
 GLfloat colors[] = {
         1, 1, 1, 1,
@@ -49,7 +55,7 @@ GLfloat colors[] = {
         1, 0.5, 0.5, alpha,
 };
 
-GLfloat vert[] = {
+GLfloat verticles[] = {
         -1, 0, 0,
         1, 0, 0,
         0, -1, 0,
@@ -92,21 +98,7 @@ GLfloat vert[] = {
 
 void rotate(bool left) { glRotatef(left ? -angle : angle, 0, 1, 0); }
 
-void octReshape(bool more) {
-    float x, y, z;
-    for (int i = 18; i < 89; i+=3) {
-        x = vert[i];
-        y = vert[i + 1];
-        z = vert[i + 2];
-        if (x > 0) vert[i] += more ? 0.1f: -0.1f;
-        else if (x < 0) vert[i] -= (more ? 0.1f: -0.1f);
-        if (y > 0) vert[i + 1] += (more ? 0.1f: -0.1f);
-        else if (y < 0) vert[i + 1] -= (more ? 0.1f: -0.1f);
-        if (z > 0) vert[i + 2] += (more ? 0.1f: -0.1f);
-        else if (z < 0) vert[i + 2] -= (more ? 0.1f: -0.1f);
-    }
-    glVertexPointer(3, GL_FLOAT, 0, vert);
-}
+void octReshape(bool more) { translate += more ? delTr : -delTr; if (translate < 0) translate = 0; }
 
 static void error_callback(int error, const char* description) { fputs(description, stderr); }
 
@@ -137,7 +129,7 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         glfwSetWindowShouldClose(window, GL_TRUE);
 }
 
-void reshape(int width, int height) {
+void reshape() {
     glLoadIdentity();
 
     if (width <= height)
@@ -152,7 +144,7 @@ int main()
     glfwSetErrorCallback(error_callback);
     if (!glfwInit())
         exit(EXIT_FAILURE);
-    window = glfwCreateWindow(800, 900, "lab3", nullptr, nullptr);
+    window = glfwCreateWindow(width, height, "lab3", nullptr, nullptr);
     glfwSetKeyCallback(window, key_callback);
     if (!window) {
         glfwTerminate();
@@ -161,32 +153,61 @@ int main()
 
     // переключаем текущий контекст на это окно
     glfwMakeContextCurrent(window);
-    glViewport(0, 0, 800, 900); // Делаем экран OpenGL в соответствии с размером окна
+    glViewport(0, 0, width, height); // Делаем экран OpenGL в соответствии с размером окна
 
-    glMatrixMode(GL_PROJECTION);
+    reshape();
 
-    reshape(800, 900);
-
-    glLineWidth(3.f);
     // включение массивов вершины и цвета
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);
+
+    // задаем массивы вершин и цвета
+    glVertexPointer(3, GL_FLOAT, 0, verticles);
+    glColorPointer(4, GL_FLOAT, 0, colors);
+
+    // работа с глубиной
+    glClearDepth(1.0);
+    glDepthFunc(GL_LESS);
+    glEnable(GL_DEPTH_TEST);
+
+    // включение прозрачности
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
-    // указываем размер этих массивов (сколько элементов будет прочитано за один проход)
-    glVertexPointer(3, GL_FLOAT, 0, vert); //3 - потому что 3 координаты для каждой вершины
-    glColorPointer(4, GL_FLOAT, 0, colors);
-    gluLookAt(0.1, 0.12, 0.1, // Положение глаз, взгляд "из"
-              0, 0, 0, // Цель, взгляд "на"
-              0.0, 1.0, 0.0); // Пока игнорируем
+
+    // перемещение камеры
+    gluLookAt(0.1, 0.12, 0.1,
+              0, 0, 0,
+              0.0, 1.0, 0.0);
+
+    // включение света
+//    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glEnable(GL_NORMALIZE);
+    glEnable(GL_COLOR_MATERIAL);
+
+    glLineWidth(3.f);
+
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
         glDrawArrays(GL_LINES, 0, 6);
-        glDrawArrays(GL_TRIANGLES, 6, 24);
+        for (int i = 18; i < 89; i += 9) {
+            float x = verticles[i] + verticles[i + 3] + verticles[i + 6];
+            float y = verticles[i + 1] + verticles[i + 4] + verticles[i + 7];
+            float z = verticles[i + 2] + verticles[i + 5] + verticles[i + 8];
+            glNormal3f(x, y, z);
+            glPushMatrix();
+                glTranslatef(x * translate, y * translate, z * translate);
+                glDrawArrays(GL_TRIANGLES, i / 3, 3);
+            glPopMatrix();
+        }
         glFlush();
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
     glDisable(GL_BLEND);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_NORMAL_ARRAY);
     return 0;
 }
